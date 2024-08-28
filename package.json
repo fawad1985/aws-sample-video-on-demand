@@ -5,10 +5,13 @@
     "aws-sample-video-on-demand": "bin/aws-sample-video-on-demand.js"
   },
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc -w",
     "test": "jest",
-    "cdk": "cdk"
+    "install": "cd functions && npm install",
+    "bootstrap:dev": "cdk bootstrap -v --profile fcdev --context stage=dev",
+    "synth:dev": "npx cdk -v --profile fcdev synth sample-video-on-demand-dev",
+    "diff:dev": "npx cdk -v --profile fcdev diff sample-video-on-demand-dev",
+    "deploy:dev": "npm run synth:dev && npx cdk -v --profile fcdev deploy sample-video-on-demand-dev",
+    "destroy:dev": "npx cdk -v --profile fcdev destroy sample-video-on-demand-dev"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
@@ -22,6 +25,7 @@
   "dependencies": {
     "aws-cdk-lib": "2.130.0",
     "constructs": "^10.0.0",
-    "source-map-support": "^0.5.21"
+    "source-map-support": "^0.5.21",
+    "esbuild": "^0.19.10"
   }
 }
