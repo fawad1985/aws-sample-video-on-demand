@@ -1,6 +1,6 @@
 import { Handler } from 'aws-lambda'
 import onSnsNotifications from './notifications/on-sns-notifications'
-
+import onMediaConvertNotifications from './notifications/on-media-convert-notifications'
  
 const RESOURCE_MAP: any = {
 }
@@ -24,9 +24,9 @@ export const handler: Handler = async (event, context, callback) => {
       } else {
         error = new Error('[404] Route Not Found')
       }
-    } else if (event.source === 'aws.events') {
-      console.log('[SCHEDULED]', JSON.stringify(event))
-      response = {}
+    } else if (event.source === 'aws.mediaconvert') {
+      // Media Convert Notifications
+      response = await onMediaConvertNotifications(event)
     } else if (event.Records && event.Records[0] && event.Records[0].Sns) {
       // SNS Notifications
       response = await onSnsNotifications(event)
