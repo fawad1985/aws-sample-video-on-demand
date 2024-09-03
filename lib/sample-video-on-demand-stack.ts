@@ -10,8 +10,10 @@ import * as mediaconvert from 'aws-cdk-lib/aws-mediaconvert'
 import * as events from 'aws-cdk-lib/aws-events'
 import * as targets from "aws-cdk-lib/aws-events-targets"
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs"
-import { LogGroup, RetentionDays, ResourcePolicy } from 'aws-cdk-lib/aws-logs'
-import { Effect, ManagedPolicy, PolicyStatement, Role, ServicePrincipal, CfnRole, CanonicalUserPrincipal} from 'aws-cdk-lib/aws-iam';
+import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs'
+import { Effect, PolicyStatement, Role, ServicePrincipal, CfnRole, CanonicalUserPrincipal} from 'aws-cdk-lib/aws-iam'
+import { RestApi, LambdaIntegration, DomainName, Cors, AuthorizationType} from 'aws-cdk-lib/aws-apigateway'
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb'
 import * as path from 'path'
 
 interface SampleVideoOnDemandStackProps extends StackProps {
@@ -807,6 +809,37 @@ export class SampleVideoOnDemandStack extends Stack {
       ],
     })
 
+    /**
+     * DynamoDB Table
+     * A single table that stores all the Encoded jobs and their statuses 
+     */
+    const jobsTable = new dynamodb.Table(this, `${props.prefix}-jobs-table-${props.stage}`, {
+      tableName: `${props.prefix}-jobs-table-${props.stage}`,
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: false,
+      deletionProtection:  false,
+      removalPolicy:  RemovalPolicy.DESTROY,
+      partitionKey: {
+        name: 'pk',
+        type: dynamodb.AttributeType.STRING
+      },
+      sortKey: {
+        name: 'sk',
+        type: dynamodb.AttributeType.STRING
+      }
+    })
+    jobsTable.addLocalSecondaryIndex({
+      indexName: 'lsi',
+      sortKey: {
+        name: 'filename',
+        type: dynamodb.AttributeType.STRING
+      },
+      projectionType: dynamodb.ProjectionType.ALL
+    })
+    new CfnOutput(this, `${props.prefix}-jobs-table-${props.stage}-output`, {
+      description: "DynamoDB jobs table.",
+      value: `${jobsTable.tableArn}`,      
+    })
 
     /**
      * CloudFront Public Key
@@ -832,7 +865,7 @@ export class SampleVideoOnDemandStack extends Stack {
       items: [cloudfrontPublicKey]
     })
     
-    const cloudFrontDistribution = new cloudfront.CfnDistribution(this, 'CloudFrontDistribution', {
+    const cloudFrontDistribution = new cloudfront.CfnDistribution(this, `${props.prefix}-cloudfront-distribution-${props.stage}`, {
       distributionConfig: {
         enabled: true,
         priceClass: 'PriceClass_All',
@@ -863,11 +896,17 @@ export class SampleVideoOnDemandStack extends Stack {
           ],
         },
       },
-    });
+    })
 
+    new CfnOutput(this, `${props.prefix}-cloudfront-dist-output-${props.stage}`, {
+      description: "CloudFront distribution.",
+      value: `https://${cloudFrontDistribution.attrDomainName}`,      
+    })
     /**
      * Common λ Function
-     * This λ Function will subscribe to SNS topic which means it will get triggered everytime we have a message on SNS topic
+     * This λ Function gets triggered everytime we have a message on SNS topic
+     * This λ Function gets triggered everytime we have a message from Eventbridge 
+     * This λ Function gets triggered on Http Api Endpoints
      */
     new LogGroup(this, `${props.prefix}-transcode-req-log-grp-${props.stage}`, {
       logGroupName: `/aws/lambda/${props.prefix}-transcode-request-${props.stage}`,
@@ -882,7 +921,10 @@ export class SampleVideoOnDemandStack extends Stack {
       handler: 'handler',
       environment: {
         STAGE: props.stage,
+        CLOUDFRONT_DOMAIN: cloudFrontDistribution.attrDomainName,
+        CLOUDFRONT_KEY_ID: cloudfrontPublicKey.publicKeyId,
         JOB_TEMPLATE_ARN: jobTemplate.attrArn,
+        JOBS_TABLE_NAME: jobsTable.tableName,
         MEDIA_CONVERT_ROLE_ARN: mediaConvertRole.attrArn,
         OUTPUT_BUCKET_NAME: outputBucket.bucketName
       },
@@ -939,6 +981,26 @@ export class SampleVideoOnDemandStack extends Stack {
       ],
       resources: [
         `${outputBucket.bucketArn}/*`
+      ]
+    }))
+    transcodeRequestLambdaFn.addToRolePolicy(new PolicyStatement({
+      actions: [
+        'dynamodb:GetItem',
+        'dynamodb:PutItem',
+        'dynamodb:UpdateItem',
+        'dynamodb:DeleteItem',
+        'dynamodb:Query',
+      ],
+      resources: [
+        `arn:aws:dynamodb:${Aws.REGION}:${Aws.ACCOUNT_ID}:table/${jobsTable.tableName}`,
+      ]
+    }))
+    transcodeRequestLambdaFn.addToRolePolicy(new PolicyStatement({
+      actions: [
+        'dynamodb:Query',
+      ],
+      resources: [
+        `arn:aws:dynamodb:${Aws.REGION}:${Aws.ACCOUNT_ID}:table/${jobsTable.tableName}/index/lsi`,
       ]
     }))
 
@@ -998,6 +1060,38 @@ export class SampleVideoOnDemandStack extends Stack {
     })
     targets.addLambdaPermission(jobNotificationsEventsRule, transcodeRequestLambdaFn)
     
+
+    /**
+     * API GW Defintion
+     */
+    const restApi = new RestApi(this, `${props.prefix}-api-gateway-${props.stage}`, {
+      restApiName: `${props.prefix}-api-gateway-${props.stage}`,
+      description: 'Sample Video Transcode Api',
+      deployOptions: {
+        stageName: props.stage,
+      },
+      defaultCorsPreflightOptions: {
+        allowOrigins: Cors.ALL_ORIGINS,
+        allowHeaders: [
+          'Content-Type',
+          'X-Amz-Date',
+          'Authorization',
+          'X-Api-Key',
+          'X-Amz-Security-Token',
+          'X-Auth-Token',
+          'Cognito-Refresh-Token',
+          'User-Agent',
+        ],
+        allowMethods: ['OPTIONS', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+        allowCredentials: true
+      }
+    })
+    restApi.root.addMethod('GET', new LambdaIntegration(transcodeRequestLambdaFn), {
+      authorizationType: AuthorizationType.NONE
+    })
+    restApi.root.addResource('jobs').addMethod('GET', new LambdaIntegration(transcodeRequestLambdaFn))
+    restApi.root.addResource('files').addResource('{filename}').addMethod('GET', new LambdaIntegration(transcodeRequestLambdaFn))
+    restApi.root.addResource('signed-cookies').addMethod('GET', new LambdaIntegration(transcodeRequestLambdaFn))
 
   }
 

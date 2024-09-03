@@ -1,10 +1,18 @@
 import { Handler } from 'aws-lambda'
 import onSnsNotifications from './notifications/on-sns-notifications'
 import onMediaConvertNotifications from './notifications/on-media-convert-notifications'
+import getVersion from './api/get-version'
+import getJobs from './api/get-jobs'
+import getFile from './api/get-file'
+import getSignedCookies from './api/get-signed-cookies'
  
 const RESOURCE_MAP: any = {
+  '/': { GET: getVersion },
+  '/jobs': { GET: getJobs },
+  '/files/{filename}': { GET: getFile },
+  '/signed-cookies': { GET: getSignedCookies },
 }
- 
+
 // Common entrypoint to all api gateway Lambda functions
 export const handler: Handler = async (event, context, callback) => {
   console.log('[EVENT]', JSON.stringify(event))

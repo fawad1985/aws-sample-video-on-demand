@@ -5,10 +5,17 @@
 
 import {
   MediaConvertClient,
-  CreateJobCommand, CreateJobCommandInput, CreateJobCommandOutput,
-  GetQueueCommandInput, GetQueueCommand, GetQueueCommandOutput
+  CreateJobCommand, 
+  CreateJobCommandInput, 
+  CreateJobCommandOutput,
+  GetQueueCommandInput, 
+  GetQueueCommand, 
+  GetQueueCommandOutput
 } from "@aws-sdk/client-mediaconvert"
 import { jobSettings } from '../lib/constants'
+import * as ddb from '../lib/aws/ddb'
+import { marshall } from "@aws-sdk/util-dynamodb"
+
 
 interface s3Message {
   Records: [{
@@ -55,13 +62,14 @@ async function handleNotification(message: s3Message) {
     // AWS:S3    
     case 'aws:s3':
       const addedKey = message.Records[0].s3.object.key.replace(/%3A/g, ':')
+      const filename = addedKey.split('.')[0]
       console.log(`Added key: ${addedKey}`)
-      const inputBucketName = message.Records[0].s3.bucket.name
-      const outputBucketName = process.env.OUTPUT_BUCKET_NAME!
+      const srcBucket = message.Records[0].s3.bucket.name
+      const destBucket = process.env.OUTPUT_BUCKET_NAME!
       const mcClient = new MediaConvertClient({})  
 
-      jobSettings.OutputGroups[0].OutputGroupSettings.HlsGroupSettings.Destination = `s3://${outputBucketName}/`
-      jobSettings.Inputs[0].FileInput = `s3://${inputBucketName}/${addedKey}`
+      jobSettings.OutputGroups[0].OutputGroupSettings.HlsGroupSettings.Destination = `s3://${destBucket}/${filename}/`
+      jobSettings.Inputs[0].FileInput = `s3://${srcBucket}/${addedKey}`
 
       const queueParams: GetQueueCommandInput = { Name: 'Default' }
       const getQueueCommand = new GetQueueCommand(queueParams)
@@ -85,7 +93,22 @@ async function handleNotification(message: s3Message) {
 
       try {
         const createJobResponse: CreateJobCommandOutput = await mcClient.send(createJobCommand)
-        console.log('Job submitted to AWS Media Convert.', JSON.stringify(createJobResponse))          
+        console.log('Job submitted to AWS Media Convert.', JSON.stringify(createJobResponse))
+        await ddb.putItem({
+          TableName: process.env.JOBS_TABLE_NAME!,
+          Item: marshall({
+            pk: 'JOBS',
+            sk: `JOB#${createJobResponse.Job?.Id}`,
+            createdAt: new Date().toJSON(),
+            jobId: createJobResponse.Job?.Id,
+            status: createJobResponse.Job!.Status,
+            srcPath: addedKey,
+            srcBucket,
+            destBucket,
+            filename: `FILENAME#${filename}`
+          }),
+          ConditionExpression: 'attribute_not_exists(sk)'        
+        })        
       } catch (error: any) {
         console.log(error)
       }

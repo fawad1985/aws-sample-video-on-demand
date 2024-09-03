@@ -7,11 +7,11 @@
   "scripts": {
     "test": "jest",
     "install": "cd functions && npm install",
-    "bootstrap:dev": "cdk bootstrap -v --profile fcdev --context stage=dev",
-    "synth:dev": "npx cdk -v --profile fcdev synth sample-video-on-demand-dev",
-    "diff:dev": "npx cdk -v --profile fcdev diff sample-video-on-demand-dev",
-    "deploy:dev": "npm run synth:dev && npx cdk -v --profile fcdev deploy sample-video-on-demand-dev",
-    "destroy:dev": "npx cdk -v --profile fcdev destroy sample-video-on-demand-dev"
+    "bootstrap:dev": "cdk bootstrap -v --profile {profile_name} --context stage=dev",
+    "synth:dev": "npx cdk -v --profile {profile_name} synth sample-video-on-demand-dev",
+    "diff:dev": "npx cdk -v --profile {profile_name} diff sample-video-on-demand-dev",
+    "deploy:dev": "npm run synth:dev && npx cdk -v --profile {profile_name} deploy sample-video-on-demand-dev",
+    "destroy:dev": "npx cdk -v --profile {profile_name} destroy sample-video-on-demand-dev"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",

@@ -6,7 +6,7 @@ import { SampleVideoOnDemandStack } from '../lib/sample-video-on-demand-stack';
 const app = new cdk.App();
 new SampleVideoOnDemandStack(app, 'sample-video-on-demand-dev', {
   env: {
-    account: 'xxxxxxxxxxx',
+    account: 'XXXXXXXXXXXX',
     region: 'eu-west-1',
   },
   stage: 'dev',
