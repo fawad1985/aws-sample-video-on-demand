@@ -41,52 +41,35 @@ To control access to the private content in the destination S3 bucket, this solu
 
 This solution is designed as a foundational implementation for a Video on Demand (VoD) platform on AWS. While it's not production-ready out of the box, it's an excellent starting point for developing a robust VoD solution.
 
+## Deployment
+<details>
+  <summary>Pre-requisites</summary>
 
-## Pre-requisites
   - 🔧 AWS CLI Installed & Configured 👉 [Get help here](https://aws.amazon.com/cli/)
   - 🔧 Node.js 18.x+
   - 🔧 AWS CDK 👉 [Get help here](https://docs.aws.amazon.com/cdk/latest/guide/getting_started.html) 
+</details>
 
+<details>
+  <summary>Installation</summary>
+  Run command:
 
-## Configuring AWS CLI
-```bash
-  ~/.aws/credentials
-
-  [profile_name]
-  aws_access_key_id = XXXXX
-  aws_secret_access_key = XXXXX
-```
-
-```bash
-  ~/.aws/config
-
-  [profile profile_name]
-  region = eu-west-1
-```
-
-
-## Installation
-Run command:
-```bash
+  ```bash
   npm install
   npm run bootstrap:dev
-```
+  ```
+</details>
+  
+<details>
+  <summary>Deploying (eu-west-1)</summary>
+  Run command:
 
-
-## Deploying to dev (eu-west-1)
-Run command:
-```bash
+  ```bash
   npm run deploy:dev
-```
+  ```
+</details>
 
-## Checking differences between local and deployed version
-Run command:
-```bash
-  npm run diff:dev
-```
 
-## Checking synthesized CloudFormation template
-Run command:
-```bash
-  npm run synth:dev
-```
+## License
+
+This project is licensed under the MIT License. See the LICENSE file for more details.
